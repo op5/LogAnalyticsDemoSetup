@@ -137,6 +137,7 @@ function RootSwitch {
 }
 
 function clean_bashrc {
+	#TODO: Fix this so the script name comes from $0.
 	sed -i '' -n "/$SCRIPT_NAME/d" $BASHRC
 }
 
@@ -166,6 +167,6 @@ else
 fi
 
 #RootSwitch
-clean_bashrc
+#clean_bashrc
 #finish
 
