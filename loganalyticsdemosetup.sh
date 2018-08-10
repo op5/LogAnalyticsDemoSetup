@@ -3,16 +3,22 @@
 ACCOUNT=''
 PASSWORD=''
 BASHRC=./sedtest.sh
+NETWORK_INTERFACE=''
 NETWORK_GATEWAY=''
+NETWORK_DHCP=1
 NETWORK_ACCESS=0
 REPO_BASE="https://github.com"
 REPO_PATH="op5/LogAnalyticsDemoSetup"
 REPO_ACCESS=0
 REPO_ON_DISK="$HOME/LogAnalyticsDemoSetup"
 SCRIPT_NAME="loganalyticsdemosetup.sh"
+LOGSTASH_PATH_SRC="logstash"
+LOGSTASH_PATH_DEST="/etc"
+ELASTICSEARCH_CONFIG_FILE="/etc/elasticsearch/elasticsearch.yml"
 
 function SET_DHCP() {
 	echo "AWESOME DHCP!!!!"
+	NETWORK_DHCP=0
 }
 
 # Setup the network settings for when not using DHCP (Advanced)
@@ -27,7 +33,8 @@ function SETUP_NETWORK() {
 	read -p "Enter the IPv4 address of your first DNS server: " dns1
 	read -p "Enter the IPv4 address of your second DNS server: " dns2
 	
-	# Saving the gateway to make sure we have connectivity.
+	# Saving network info to make sure we have connectivity.
+	NETWORK_INTERFACE=$inf_name
 	NETWORK_GATEWAY=$gateway
 
 	# Share the collected network information with the nmcli
@@ -105,6 +112,19 @@ function repo_update {
 	git pull
 }
 
+function elasticsearch_config {
+	if [[ $NETWORK_DHCP -eq 0 ]]
+	then
+		sed -i '' "s/network.host: \[.*\]$/network.host: \[\"_local_\", \"_site_\", \"_global_\"\]/" $ELASTICSEARCH_CONFIG_FILE
+	else
+		sed -i '' "s/network.host: \[.*\]$/network.host: \[\"_local_\", \"_$NETWORK_INTERFACE\_\"\]/" $ELASTICSEARCH_CONFIG_FILE
+	fi
+}
+
+function logstash_config {
+	rsync -rv $LOGSTASH_PATH_SRC $LOGSTASH_PATH_DEST
+}
+
 function createuser {
 	read -rp "User account: " account
 	ACCOUNT=$account
@@ -142,18 +162,18 @@ function clean_bashrc {
 }
 
 function finish {
-	#shutdown -r now
-	printf "Rebooting VM. (Not really)\n"
+	printf "Rebooting VM.\n"
+	shutdown -r now
 }
 
 printf "Log Analytics Demo Setup.\n"
 
-#SETUP_NETWORK_CHOICE
-#network_ping_gw
+SETUP_NETWORK_CHOICE
+network_ping_gw
 if [[ $NETWORK_ACCESS -eq 0 ]]
 then
 	printf "Check to see if repo host is resolvable.\n"
-	#network_resolve_repo_hostname
+	network_resolve_repo_hostname
 else
 	printf "Skipping resolving repo host since network access is in an unknown state.\n"
 fi
@@ -161,12 +181,14 @@ fi
 if [[ $NETWORK_ACCESS -eq 0 && $REPO_ACCESS -eq 0 ]]
 then
 	printf "Getting any repo updates.\n"
-	#repo_update
+	repo_update
 else
 	printf "Skipping pulling repo updates.\n"
 fi
 
-#RootSwitch
-#clean_bashrc
-#finish
+elasticsearch_config
+logstash_config
+RootSwitch
+clean_bashrc
+finish
 
