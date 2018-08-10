@@ -2,9 +2,9 @@
 
 ACCOUNT=''
 PASSWORD=''
-BASHRC=./sedtest.sh
+BASHRC=$HOME/.bashrc
 NETWORK_INTERFACE=''
-NETWORK_GATEWAY=''
+NETWORK_GATEWAY=`ip route list | grep default | cut -d ' ' -f 3`
 NETWORK_DHCP=1
 NETWORK_ACCESS=0
 REPO_BASE="https://github.com"
@@ -15,6 +15,7 @@ SCRIPT_NAME="loganalyticsdemosetup.sh"
 LOGSTASH_PATH_SRC="logstash"
 LOGSTASH_PATH_DEST="/etc"
 ELASTICSEARCH_CONFIG_FILE="/etc/elasticsearch/elasticsearch.yml"
+
 
 function SET_DHCP() {
 	echo "AWESOME DHCP!!!!"
@@ -62,6 +63,7 @@ function SETUP_NETWORK() {
 	read -r -p "Are you sure? [Yes/No/Dhcp] " response
 	case "$response" in
 	    [yY][eE][sS]|[yY])
+		#TODO: ask if the interface needs to be bounced just in case ssh is being used.
 		printf "Bouncing connection for settings to take effect.\n"
 		nmcli connection up "$inf_name"
 	        printf "AWESOME NETWORK SETUP COMPLETE!!\n"
@@ -89,9 +91,10 @@ function SETUP_NETWORK_CHOICE() {
 }
 
 function network_ping_gw {
-	ping -Ac3 $NETWORK_GATEWAY printf "\n" 
+	ping -Ac3 $NETWORK_GATEWAY 
 	if [[ $? -ne 0 ]] 
 	then
+		printf "\n" 
 		printf "Unable to contact gateway.\n"
 		printf "Continuing without network access.\n"
 		NETWORK_ACCESS=1
@@ -115,9 +118,9 @@ function repo_update {
 function elasticsearch_config {
 	if [[ $NETWORK_DHCP -eq 0 ]]
 	then
-		sed -i '' "s/network.host: \[.*\]$/network.host: \[\"_local_\", \"_site_\", \"_global_\"\]/" $ELASTICSEARCH_CONFIG_FILE
+		sed -i 's/network.host: \[.\+\]/network.host: \["_local_", "_site_", "_global_"\]/' $ELASTICSEARCH_CONFIG_FILE
 	else
-		sed -i '' "s/network.host: \[.*\]$/network.host: \[\"_local_\", \"_$NETWORK_INTERFACE\_\"\]/" $ELASTICSEARCH_CONFIG_FILE
+		sed -i "s/network.host: \[.\+\]$/network.host: \[\"_local_\", \"_$NETWORK_INTERFACE\_\"\]/" $ELASTICSEARCH_CONFIG_FILE
 	fi
 }
 
@@ -128,7 +131,6 @@ function logstash_config {
 function createuser {
 	read -rp "User account: " account
 	ACCOUNT=$account
-	printf "$ACCOUNT\n"
 	adduser -mG wheel $ACCOUNT 
 }
 
@@ -158,12 +160,20 @@ function RootSwitch {
 
 function clean_bashrc {
 	#TODO: Fix this so the script name comes from $0.
-	sed -i '' -n "/$SCRIPT_NAME/d" $BASHRC
+	sed -i "/$SCRIPT_NAME/d" $BASHRC
 }
 
 function finish {
-	printf "Rebooting VM.\n"
-	shutdown -r now
+	read -p "Ready to reboot the server? [Yes/No]: " bounce
+	case "$bounce" in
+		[yY][eE][sS]|[yY] )
+			printf "Rebooting VM.\n"
+			shutdown -r now
+			;;
+		[nN][oO]|[nN] )
+			printf "Exiting script.\n"
+			;;
+	esac
 }
 
 printf "Log Analytics Demo Setup.\n"
